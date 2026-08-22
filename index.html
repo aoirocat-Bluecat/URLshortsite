@@ -76,9 +76,10 @@
 
 <div class="container">
     <h1>URL短縮ツール</h1>
-    <input type="url" id="longUrl" placeholder="短くしたいURLを入力 (https://...)" required>
-    <button onclick="shortenUrl()">URLを短縮する</button>
-    <div id="errorMessage" class="error">有効なURLを入力してください。</div>
+    <!-- URLは必ず http:// か https:// から始まる必要があります -->
+    <input type="url" id="longUrl" placeholder="短くしたいURL (https://...)" required>
+    <button onclick="shortenUrl()" id="submitBtn">URLを短縮する</button>
+    <div id="errorMessage" class="error">有効なURL（http〜）を入力してください。</div>
 
     <div class="result-box" id="resultBox">
         <p>短縮されたURL:</p>
@@ -88,27 +89,14 @@
 </div>
 
 <script>
-    // 1. APIからデータを受け取るための専用の関数（JSONP用）
-    function handleIsGdResponse(data) {
-        const resultBox = document.getElementById('resultBox');
-        const shortUrlInput = document.getElementById('shortUrl');
-
-        // URLが正しく返ってきた場合
-        if (data.shorturl) {
-            shortUrlInput.value = data.shorturl;
-            resultBox.style.display = 'block';
-        } else {
-            // エラーが返ってきた場合
-            alert('短縮に失敗しました。別のURLをお試しください。');
-        }
-    }
-
-    function shortenUrl() {
+    async function shortenUrl() {
         const longUrl = document.getElementById('longUrl').value;
         const resultBox = document.getElementById('resultBox');
         const errorMessage = document.getElementById('errorMessage');
+        const shortUrlInput = document.getElementById('shortUrl');
+        const submitBtn = document.getElementById('submitBtn');
 
-        // 入力チェック
+        // 入力チェック (httpから始まっているか)
         if (!longUrl || !longUrl.startsWith('http')) {
             errorMessage.style.display = 'block';
             resultBox.style.display = 'none';
@@ -116,23 +104,37 @@
         }
         errorMessage.style.display = 'none';
 
-        // 2. fetchの代わりに、scriptタグを作って通信する（CORSエラー回避のため）
-        const script = document.createElement('script');
-        // URLの最後に &callback=handleIsGdResponse を付けるのがポイントです
-        script.src = `https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}&callback=handleIsGdResponse`;
-        
-        // もしネットワーク自体が切れていた場合のエラー処理
-        script.onerror = function() {
-            alert('通信エラーが発生しました。インターネット接続を確認してください。');
-        };
+        // 処理中はボタンの文字を変える
+        submitBtn.innerText = "短縮中...";
+        submitBtn.disabled = true;
 
-        // HTMLにscriptタグを追加して通信を実行
-        document.body.appendChild(script);
-        
-        // 通信が終わったら不要になったscriptタグを削除
-        script.onload = function() {
-            document.body.removeChild(script);
-        };
+        try {
+            // is.gdのAPI URL
+            const targetApiUrl = `https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}`;
+            
+            // 仲介サーバー（allorigins）を経由してエラーやブロックを回避する
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetApiUrl)}`;
+
+            const response = await fetch(proxyUrl);
+            const data = await response.json();
+            
+            // 仲介サーバーが取得した中身(文字列)をプログラム用に変換
+            const result = JSON.parse(data.contents);
+
+            if (result.shorturl) {
+                shortUrlInput.value = result.shorturl;
+                resultBox.style.display = 'block';
+            } else {
+                alert('短縮に失敗しました。このURLはサポートされていない可能性があります。');
+            }
+        } catch (error) {
+            alert('通信エラーが発生しました。ブラウザのセキュリティ設定や広告ブロッカーが影響している可能性があります。');
+            console.error(error);
+        } finally {
+            // ボタンを元の状態に戻す
+            submitBtn.innerText = "URLを短縮する";
+            submitBtn.disabled = false;
+        }
     }
 
     // コピー機能
