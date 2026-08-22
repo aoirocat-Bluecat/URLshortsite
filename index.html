@@ -6,13 +6,14 @@
     <title>URL短縮ツール</title>
     <style>
         body {
-            font-family: 'Helvetica Neue', Arial, sans-serif;
+            font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
             background-color: #f4f7f6;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             margin: 0;
+            overflow: hidden; 
         }
         .container {
             background-color: #ffffff;
@@ -36,9 +37,13 @@
             border-radius: 6px;
             font-size: 16px;
             box-sizing: border-box;
+            outline: none;
+        }
+        input[type="url"]:focus, input[type="text"]:focus {
+            border-color: #0078D4; 
         }
         button {
-            background-color: #007BFF;
+            background-color: #0078D4; 
             color: white;
             border: none;
             padding: 12px 20px;
@@ -50,7 +55,11 @@
             margin-bottom: 10px;
         }
         button:hover {
-            background-color: #0056b3;
+            background-color: #005A9E;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
         }
         .result-box {
             display: none;
@@ -70,13 +79,47 @@
         .copy-btn:hover {
             background-color: #218838;
         }
+
+        /* --- Windows 11風 トースト通知 --- */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px); 
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            padding: 16px 20px;
+            width: 280px;
+            border-left: 4px solid #0078D4; 
+            transform: translateX(120%); 
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            z-index: 1000;
+            text-align: left;
+        }
+        .toast.show {
+            transform: translateX(0); 
+        }
+        .toast.error-toast {
+            border-left-color: #d9534f; 
+        }
+        .toast-title {
+            font-weight: 600;
+            font-size: 15px;
+            color: #202020;
+            margin-bottom: 4px;
+        }
+        .toast-message {
+            font-size: 13px;
+            color: #555555;
+            line-height: 1.4;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h1>URL短縮ツール</h1>
-    <!-- URLは必ず http:// か https:// から始まる必要があります -->
     <input type="url" id="longUrl" placeholder="短くしたいURL (https://...)" required>
     <button onclick="shortenUrl()" id="submitBtn">URLを短縮する</button>
     <div id="errorMessage" class="error">有効なURL（http〜）を入力してください。</div>
@@ -88,15 +131,58 @@
     </div>
 </div>
 
+<!-- 通知用のHTML要素 -->
+<div id="toast" class="toast">
+    <div class="toast-title" id="toastTitle">通知</div>
+    <div class="toast-message" id="toastMessage">メッセージ</div>
+</div>
+
 <script>
-    async function shortenUrl() {
-        const longUrl = document.getElementById('longUrl').value;
+    let toastTimeout;
+    function showNotification(title, message, isError = false) {
+        const toast = document.getElementById('toast');
+        document.getElementById('toastTitle').innerText = title;
+        document.getElementById('toastMessage').innerText = message;
+        
+        if (isError) {
+            toast.classList.add('error-toast');
+        } else {
+            toast.classList.remove('error-toast');
+        }
+
+        toast.classList.add('show');
+        
+        clearTimeout(toastTimeout);
+        
+        toastTimeout = setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3500);
+    }
+
+    // JSONP用のコールバック関数
+    function handleIsGdResponse(data) {
         const resultBox = document.getElementById('resultBox');
-        const errorMessage = document.getElementById('errorMessage');
         const shortUrlInput = document.getElementById('shortUrl');
         const submitBtn = document.getElementById('submitBtn');
 
-        // 入力チェック (httpから始まっているか)
+        if (data.shorturl) {
+            shortUrlInput.value = data.shorturl;
+            resultBox.style.display = 'block';
+            showNotification("短縮完了", "URLの短縮に成功しました。");
+        } else {
+            showNotification("エラー", "短縮に失敗しました。別のURLをお試しください。", true);
+        }
+
+        submitBtn.innerText = "URLを短縮する";
+        submitBtn.disabled = false;
+    }
+
+    function shortenUrl() {
+        const longUrl = document.getElementById('longUrl').value;
+        const resultBox = document.getElementById('resultBox');
+        const errorMessage = document.getElementById('errorMessage');
+        const submitBtn = document.getElementById('submitBtn');
+
         if (!longUrl || !longUrl.startsWith('http')) {
             errorMessage.style.display = 'block';
             resultBox.style.display = 'none';
@@ -104,46 +190,32 @@
         }
         errorMessage.style.display = 'none';
 
-        // 処理中はボタンの文字を変える
         submitBtn.innerText = "短縮中...";
         submitBtn.disabled = true;
 
-        try {
-            // is.gdのAPI URL
-            const targetApiUrl = `https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}`;
-            
-            // 仲介サーバー（allorigins）を経由してエラーやブロックを回避する
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetApiUrl)}`;
-
-            const response = await fetch(proxyUrl);
-            const data = await response.json();
-            
-            // 仲介サーバーが取得した中身(文字列)をプログラム用に変換
-            const result = JSON.parse(data.contents);
-
-            if (result.shorturl) {
-                shortUrlInput.value = result.shorturl;
-                resultBox.style.display = 'block';
-            } else {
-                alert('短縮に失敗しました。このURLはサポートされていない可能性があります。');
-            }
-        } catch (error) {
-            alert('通信エラーが発生しました。ブラウザのセキュリティ設定や広告ブロッカーが影響している可能性があります。');
-            console.error(error);
-        } finally {
-            // ボタンを元の状態に戻す
+        // CORSエラーを回避するためのJSONP方式（直接is.gdと通信）
+        const script = document.createElement('script');
+        script.src = `https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}&callback=handleIsGdResponse`;
+        
+        script.onerror = function() {
+            showNotification("通信エラー", "インターネット接続を確認してください。", true);
             submitBtn.innerText = "URLを短縮する";
             submitBtn.disabled = false;
-        }
+        };
+
+        document.body.appendChild(script);
+        
+        script.onload = function() {
+            document.body.removeChild(script);
+        };
     }
 
-    // コピー機能
     function copyUrl() {
         const shortUrl = document.getElementById('shortUrl').value;
         navigator.clipboard.writeText(shortUrl).then(() => {
-            alert('クリップボードにコピーしました！');
+            showNotification("コピー完了", "クリップボードにコピーしました！");
         }).catch(err => {
-            alert('コピーに失敗しました。手動でコピーしてください。');
+            showNotification("エラー", "コピーに失敗しました。", true);
         });
     }
 </script>
