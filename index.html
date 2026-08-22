@@ -142,8 +142,8 @@
     </div>
 </div>
 
-<!-- バージョンを v1.5 に更新 -->
-<div class="version-info">v1.5</div>
+<!-- バージョンを v1.6 に更新 -->
+<div class="version-info">v1.6</div>
 
 <div id="toast" class="toast">
     <div class="toast-title" id="toastTitle">通知</div>
@@ -189,37 +189,49 @@
         submitBtn.innerText = "短縮中...";
         submitBtn.disabled = true;
 
+        let finalShortUrl = "";
+
         try {
-            const targetApiUrl = `https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}`;
-            
-            let data = null;
-
-            // 【第一候補】最も高速で安定しているプロキシ (corsproxy.io)
+            // 【作戦1】is.gd ＋ 別の強力なプロキシ (codetabs) を使う
             try {
-                const res1 = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetApiUrl)}`);
-                if (res1.ok) data = await res1.json();
-            } catch (e) {
-                console.warn("第一候補のプロキシが失敗しました。第二候補を試します。");
+                const api1 = `https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}`;
+                const res1 = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(api1)}`);
+                const data1 = await res1.json();
+                if (data1 && data1.shorturl) {
+                    finalShortUrl = data1.shorturl;
+                }
+            } catch (e1) {
+                console.warn("作戦1が失敗しました。作戦2へ移行します。");
             }
 
-            // 【第二候補】第一候補がダメだった場合の予備プロキシ (allorigins raw)
-            if (!data) {
-                const res2 = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(targetApiUrl)}`);
-                if (res2.ok) data = await res2.json();
+            // 【作戦2】作戦1がダメなら、世界的サービス「TinyURL」を使う
+            if (!finalShortUrl) {
+                try {
+                    const api2 = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`;
+                    const res2 = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(api2)}`);
+                    const data2 = await res2.json();
+                    
+                    // TinyURLはテキスト形式でURLを返してくるため抽出
+                    if (data2 && data2.contents && data2.contents.startsWith('http')) {
+                        finalShortUrl = data2.contents;
+                    }
+                } catch (e2) {
+                    console.warn("作戦2も失敗しました。");
+                }
             }
 
-            // どちらかのプロキシでデータが取得できた場合
-            if (data && data.shorturl) {
-                shortUrlInput.value = data.shorturl;
+            // どちらかの作戦で短縮URLが取得できたか判定
+            if (finalShortUrl) {
+                shortUrlInput.value = finalShortUrl;
                 resultBox.style.display = 'block';
                 showNotification("短縮完了", "URLの短縮に成功しました！");
             } else {
-                throw new Error("APIから正しいデータが返ってきませんでした");
+                throw new Error("すべての短縮サーバーから応答がありませんでした");
             }
 
         } catch (error) {
             console.error(error);
-            showNotification("通信エラー", "短縮サーバーに接続できませんでした。時間をおいてお試しください。", true);
+            showNotification("通信エラー", "ブラウザのセキュリティ設定が影響している可能性があります。", true);
         } finally {
             submitBtn.innerText = "URLを短縮する";
             submitBtn.disabled = false;
