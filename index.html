@@ -142,8 +142,8 @@
     </div>
 </div>
 
-<!-- バージョンを v1.8 に更新！ -->
-<div class="version-info">v1.8</div>
+<!-- 最終奥義 v1.9 -->
+<div class="version-info">v1.9</div>
 
 <div id="toast" class="toast">
     <div class="toast-title" id="toastTitle">通知</div>
@@ -169,7 +169,7 @@
         
         toastTimeout = setTimeout(() => {
             toast.classList.remove('show');
-        }, 4000);
+        }, 4500); 
     }
 
     async function shortenUrl() {
@@ -189,53 +189,45 @@
         submitBtn.innerText = "短縮中...";
         submitBtn.disabled = true;
 
-        let finalShortUrl = "";
-
         try {
-            // 【大本命】1pt.co API
-            // Chromeの厳しいセキュリティ（CORS）に完全対応しているため、プロキシなしで直接通信できます。
-            try {
-                const res1 = await fetch(`https://api.1pt.co/addURL?long=${encodeURIComponent(longUrl)}`);
-                if (res1.ok) {
-                    const data1 = await res1.json();
-                    if (data1.short) {
-                        finalShortUrl = `https://1pt.co/${data1.short}`;
-                    }
-                }
-            } catch (e1) {
-                console.warn("1pt.coの通信失敗", e1);
-            }
-
-            // 【予備】is.gd ＋ 最も制限の緩いプロキシ
-            // 万が一1pt.coがダウンしていた時のためのバックアップ
-            if (!finalShortUrl) {
-                try {
-                    const api2 = `https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}`;
-                    const res2 = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(api2)}`);
-                    if (res2.ok) {
-                        const data2 = await res2.json();
-                        const parsed = JSON.parse(data2.contents);
-                        if (parsed && parsed.shorturl) {
-                            finalShortUrl = parsed.shorturl;
-                        }
-                    }
-                } catch (e2) {
-                    console.warn("バックアップ通信も失敗", e2);
-                }
-            }
-
-            // 成功したかどうか判定
-            if (finalShortUrl) {
-                shortUrlInput.value = finalShortUrl;
+            // 【作戦1】通常通り裏側でTinyURLのAPI通信を試みる
+            const targetApi = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`;
+            const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetApi)}`);
+            
+            if (!res.ok) throw new Error("Proxy block");
+            
+            const data = await res.json();
+            if (data.contents && data.contents.startsWith('http')) {
+                shortUrlInput.value = data.contents;
                 resultBox.style.display = 'block';
                 showNotification("短縮完了", "URLの短縮に成功しました！");
             } else {
-                throw new Error("API通信ブロック");
+                throw new Error("Invalid format");
             }
 
         } catch (error) {
-            console.error(error);
-            showNotification("通信エラー", "ネットワークの設定により通信が遮断されました。", true);
+            // 【最終奥義】Chromeが通信を遮断した場合、強制的に新しいタブで短縮サイトを開く
+            console.warn("裏側の通信がブロックされました。ブロック回避モードを発動します。");
+            
+            showNotification("ブロック回避", "Chromeのセキュリティにより通信が弾かれたため、新しいタブで短縮ページを開きました！", false);
+
+            // 物理的にフォームを作成して別タブで送信（これはブラウザに絶対にブロックされません）
+            const form = document.createElement('form');
+            form.method = 'GET';
+            form.action = 'https://is.gd/create.php';
+            form.target = '_blank'; // 新しいタブを開く
+
+            const inputUrl = document.createElement('input');
+            inputUrl.type = 'hidden';
+            inputUrl.name = 'url';
+            inputUrl.value = longUrl;
+
+            form.appendChild(inputUrl);
+            document.body.appendChild(form);
+            form.submit(); // 送信！
+            document.body.removeChild(form); // 使い終わったフォームを消す
+
+            resultBox.style.display = 'none';
         } finally {
             submitBtn.innerText = "URLを短縮する";
             submitBtn.disabled = false;
