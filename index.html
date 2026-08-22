@@ -142,8 +142,8 @@
     </div>
 </div>
 
-<!-- バージョンを v1.3 に更新 -->
-<div class="version-info">v1.3</div>
+<!-- バージョンを v1.4 に更新 -->
+<div class="version-info">v1.4</div>
 
 <div id="toast" class="toast">
     <div class="toast-title" id="toastTitle">通知</div>
@@ -190,10 +190,10 @@
         submitBtn.innerText = "短縮中...";
         submitBtn.disabled = true;
 
-        // 通信が被らないよう、一意の関数名を自動生成する
+        // 通信が被らないよう、一意の関数名を自動生成
         const callbackName = 'jsonp_' + Math.random().toString(36).substr(2, 9);
 
-        // ★ 5秒経っても通信が終わらない場合のフリーズ回避機能 ★
+        // 5秒経っても通信が終わらない場合のフリーズ回避機能
         const fallbackTimeout = setTimeout(() => {
             cleanup();
             showNotification("タイムアウト", "サーバーの応答がありません。時間をおいて試してください。", true);
@@ -203,7 +203,7 @@
 
         // 通信成功時に実行される処理
         window[callbackName] = function(data) {
-            cleanup(); // 成功したのでフリーズ回避のタイマーを止める
+            cleanup(); 
             
             if (data.shorturl) {
                 shortUrlInput.value = data.shorturl;
@@ -217,23 +217,21 @@
             submitBtn.disabled = false;
         };
 
-        // 直接 is.gd と通信するシステム
+        // ★ 修正箇所： format=json ではなく format=jsonp に変更しました ★
         const script = document.createElement('script');
         script.id = callbackName;
-        script.src = `https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}&callback=${callbackName}`;
+        script.src = `https://is.gd/create.php?format=jsonp&url=${encodeURIComponent(longUrl)}&callback=${callbackName}`;
         
-        // 広告ブロッカーなどで通信が遮断された時の処理
         script.onerror = function() {
             cleanup();
-            showNotification("通信エラー", "広告ブロッカー等が影響している可能性があります。", true);
+            showNotification("通信エラー", "インターネット接続等を確認してください。", true);
             submitBtn.innerText = "URLを短縮する";
             submitBtn.disabled = false;
         };
 
-        // 通信開始
         document.body.appendChild(script);
 
-        // お掃除用関数（使い終わったタイマーやシステムを消去）
+        // お掃除用関数
         function cleanup() {
             clearTimeout(fallbackTimeout);
             const s = document.getElementById(callbackName);
