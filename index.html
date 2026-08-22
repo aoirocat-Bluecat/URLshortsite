@@ -142,7 +142,8 @@
     </div>
 </div>
 
-<div class="version-info">v1.1</div>
+<!-- バージョンを v1.2 に更新 -->
+<div class="version-info">v1.2</div>
 
 <div id="toast" class="toast">
     <div class="toast-title" id="toastTitle">通知</div>
@@ -190,15 +191,12 @@
         submitBtn.disabled = true;
 
         try {
-            // is.gdのAPI
             const targetApiUrl = `https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}`;
-            // GitHub Pagesの通信ブロック(CORS)を回避するための仲介サーバー
             const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetApiUrl)}`;
 
             const response = await fetch(proxyUrl);
             const data = await response.json();
             
-            // 仲介サーバーが取得したデータを変換
             const result = JSON.parse(data.contents);
 
             if (result.shorturl) {
