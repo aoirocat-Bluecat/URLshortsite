@@ -142,8 +142,8 @@
     </div>
 </div>
 
-<!-- バージョンを v1.7 に更新 -->
-<div class="version-info">v1.7</div>
+<!-- バージョンを v1.8 に更新！ -->
+<div class="version-info">v1.8</div>
 
 <div id="toast" class="toast">
     <div class="toast-title" id="toastTitle">通知</div>
@@ -169,7 +169,7 @@
         
         toastTimeout = setTimeout(() => {
             toast.classList.remove('show');
-        }, 4000); // 読めるように少し長めの4秒に変更
+        }, 4000);
     }
 
     async function shortenUrl() {
@@ -192,40 +192,35 @@
         let finalShortUrl = "";
 
         try {
-            // 【作戦1】spoo.me API（プロキシ不要で直接通信できる最新サービス）
+            // 【大本命】1pt.co API
+            // Chromeの厳しいセキュリティ（CORS）に完全対応しているため、プロキシなしで直接通信できます。
             try {
-                const res1 = await fetch('https://spoo.me/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'Accept': 'application/json'
-                    },
-                    body: new URLSearchParams({ url: longUrl })
-                });
+                const res1 = await fetch(`https://api.1pt.co/addURL?long=${encodeURIComponent(longUrl)}`);
                 if (res1.ok) {
                     const data1 = await res1.json();
-                    if (data1.short_url) finalShortUrl = data1.short_url;
+                    if (data1.short) {
+                        finalShortUrl = `https://1pt.co/${data1.short}`;
+                    }
                 }
             } catch (e1) {
-                console.warn("spoo.meの通信に失敗しました", e1);
+                console.warn("1pt.coの通信失敗", e1);
             }
 
-            // 【作戦2】CleanURI API（プロキシ不要で直接通信できる老舗サービス）
+            // 【予備】is.gd ＋ 最も制限の緩いプロキシ
+            // 万が一1pt.coがダウンしていた時のためのバックアップ
             if (!finalShortUrl) {
                 try {
-                    const res2 = await fetch('https://cleanuri.com/api/v1/shorten', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded'
-                        },
-                        body: new URLSearchParams({ url: longUrl })
-                    });
+                    const api2 = `https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}`;
+                    const res2 = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(api2)}`);
                     if (res2.ok) {
                         const data2 = await res2.json();
-                        if (data2.result_url) finalShortUrl = data2.result_url;
+                        const parsed = JSON.parse(data2.contents);
+                        if (parsed && parsed.shorturl) {
+                            finalShortUrl = parsed.shorturl;
+                        }
                     }
                 } catch (e2) {
-                    console.warn("CleanURIの通信に失敗しました", e2);
+                    console.warn("バックアップ通信も失敗", e2);
                 }
             }
 
@@ -240,7 +235,7 @@
 
         } catch (error) {
             console.error(error);
-            showNotification("通信エラー", "広告ブロッカーやBraveブラウザのShield機能をオフにしてお試しください。", true);
+            showNotification("通信エラー", "ネットワークの設定により通信が遮断されました。", true);
         } finally {
             submitBtn.innerText = "URLを短縮する";
             submitBtn.disabled = false;
