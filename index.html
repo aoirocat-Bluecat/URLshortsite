@@ -142,8 +142,8 @@
     </div>
 </div>
 
-<!-- バージョンを v1.6 に更新 -->
-<div class="version-info">v1.6</div>
+<!-- バージョンを v1.7 に更新 -->
+<div class="version-info">v1.7</div>
 
 <div id="toast" class="toast">
     <div class="toast-title" id="toastTitle">通知</div>
@@ -169,7 +169,7 @@
         
         toastTimeout = setTimeout(() => {
             toast.classList.remove('show');
-        }, 3500);
+        }, 4000); // 読めるように少し長めの4秒に変更
     }
 
     async function shortenUrl() {
@@ -192,46 +192,55 @@
         let finalShortUrl = "";
 
         try {
-            // 【作戦1】is.gd ＋ 別の強力なプロキシ (codetabs) を使う
+            // 【作戦1】spoo.me API（プロキシ不要で直接通信できる最新サービス）
             try {
-                const api1 = `https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}`;
-                const res1 = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(api1)}`);
-                const data1 = await res1.json();
-                if (data1 && data1.shorturl) {
-                    finalShortUrl = data1.shorturl;
+                const res1 = await fetch('https://spoo.me/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json'
+                    },
+                    body: new URLSearchParams({ url: longUrl })
+                });
+                if (res1.ok) {
+                    const data1 = await res1.json();
+                    if (data1.short_url) finalShortUrl = data1.short_url;
                 }
             } catch (e1) {
-                console.warn("作戦1が失敗しました。作戦2へ移行します。");
+                console.warn("spoo.meの通信に失敗しました", e1);
             }
 
-            // 【作戦2】作戦1がダメなら、世界的サービス「TinyURL」を使う
+            // 【作戦2】CleanURI API（プロキシ不要で直接通信できる老舗サービス）
             if (!finalShortUrl) {
                 try {
-                    const api2 = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`;
-                    const res2 = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(api2)}`);
-                    const data2 = await res2.json();
-                    
-                    // TinyURLはテキスト形式でURLを返してくるため抽出
-                    if (data2 && data2.contents && data2.contents.startsWith('http')) {
-                        finalShortUrl = data2.contents;
+                    const res2 = await fetch('https://cleanuri.com/api/v1/shorten', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded'
+                        },
+                        body: new URLSearchParams({ url: longUrl })
+                    });
+                    if (res2.ok) {
+                        const data2 = await res2.json();
+                        if (data2.result_url) finalShortUrl = data2.result_url;
                     }
                 } catch (e2) {
-                    console.warn("作戦2も失敗しました。");
+                    console.warn("CleanURIの通信に失敗しました", e2);
                 }
             }
 
-            // どちらかの作戦で短縮URLが取得できたか判定
+            // 成功したかどうか判定
             if (finalShortUrl) {
                 shortUrlInput.value = finalShortUrl;
                 resultBox.style.display = 'block';
                 showNotification("短縮完了", "URLの短縮に成功しました！");
             } else {
-                throw new Error("すべての短縮サーバーから応答がありませんでした");
+                throw new Error("API通信ブロック");
             }
 
         } catch (error) {
             console.error(error);
-            showNotification("通信エラー", "ブラウザのセキュリティ設定が影響している可能性があります。", true);
+            showNotification("通信エラー", "広告ブロッカーやBraveブラウザのShield機能をオフにしてお試しください。", true);
         } finally {
             submitBtn.innerText = "URLを短縮する";
             submitBtn.disabled = false;
@@ -243,7 +252,7 @@
         navigator.clipboard.writeText(shortUrl).then(() => {
             showNotification("コピー完了", "クリップボードにコピーしました！");
         }).catch(err => {
-            showNotification("エラー", "コピーに失敗しました。手動でコピーしてください。", true);
+            showNotification("エラー", "コピーに失敗しました。", true);
         });
     }
 </script>
