@@ -81,7 +81,7 @@
             background-color: #218838;
         }
 
-        /* --- バージョン表記のスタイル --- */
+        /* --- バージョン表記 --- */
         .version-info {
             position: absolute;
             bottom: 10px;
@@ -91,7 +91,7 @@
             pointer-events: none;
         }
 
-        /* --- Windows 11風 トースト通知のスタイル --- */
+        /* --- Windows 11風 トースト通知 --- */
         .toast {
             position: fixed;
             bottom: 34px; 
@@ -142,8 +142,8 @@
     </div>
 </div>
 
-<!-- バージョンを v1.4 に更新 -->
-<div class="version-info">v1.4</div>
+<!-- バージョンを v1.5 に更新 -->
+<div class="version-info">v1.5</div>
 
 <div id="toast" class="toast">
     <div class="toast-title" id="toastTitle">通知</div>
@@ -172,7 +172,7 @@
         }, 3500);
     }
 
-    function shortenUrl() {
+    async function shortenUrl() {
         const longUrl = document.getElementById('longUrl').value;
         const resultBox = document.getElementById('resultBox');
         const errorMessage = document.getElementById('errorMessage');
@@ -186,57 +186,43 @@
         }
         errorMessage.style.display = 'none';
 
-        // ボタンを押せなくする
         submitBtn.innerText = "短縮中...";
         submitBtn.disabled = true;
 
-        // 通信が被らないよう、一意の関数名を自動生成
-        const callbackName = 'jsonp_' + Math.random().toString(36).substr(2, 9);
-
-        // 5秒経っても通信が終わらない場合のフリーズ回避機能
-        const fallbackTimeout = setTimeout(() => {
-            cleanup();
-            showNotification("タイムアウト", "サーバーの応答がありません。時間をおいて試してください。", true);
-            submitBtn.innerText = "URLを短縮する";
-            submitBtn.disabled = false;
-        }, 5000);
-
-        // 通信成功時に実行される処理
-        window[callbackName] = function(data) {
-            cleanup(); 
+        try {
+            const targetApiUrl = `https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}`;
             
-            if (data.shorturl) {
+            let data = null;
+
+            // 【第一候補】最も高速で安定しているプロキシ (corsproxy.io)
+            try {
+                const res1 = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetApiUrl)}`);
+                if (res1.ok) data = await res1.json();
+            } catch (e) {
+                console.warn("第一候補のプロキシが失敗しました。第二候補を試します。");
+            }
+
+            // 【第二候補】第一候補がダメだった場合の予備プロキシ (allorigins raw)
+            if (!data) {
+                const res2 = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(targetApiUrl)}`);
+                if (res2.ok) data = await res2.json();
+            }
+
+            // どちらかのプロキシでデータが取得できた場合
+            if (data && data.shorturl) {
                 shortUrlInput.value = data.shorturl;
                 resultBox.style.display = 'block';
                 showNotification("短縮完了", "URLの短縮に成功しました！");
             } else {
-                showNotification("エラー", "短縮に失敗しました。別のURLをお試しください。", true);
+                throw new Error("APIから正しいデータが返ってきませんでした");
             }
-            
+
+        } catch (error) {
+            console.error(error);
+            showNotification("通信エラー", "短縮サーバーに接続できませんでした。時間をおいてお試しください。", true);
+        } finally {
             submitBtn.innerText = "URLを短縮する";
             submitBtn.disabled = false;
-        };
-
-        // ★ 修正箇所： format=json ではなく format=jsonp に変更しました ★
-        const script = document.createElement('script');
-        script.id = callbackName;
-        script.src = `https://is.gd/create.php?format=jsonp&url=${encodeURIComponent(longUrl)}&callback=${callbackName}`;
-        
-        script.onerror = function() {
-            cleanup();
-            showNotification("通信エラー", "インターネット接続等を確認してください。", true);
-            submitBtn.innerText = "URLを短縮する";
-            submitBtn.disabled = false;
-        };
-
-        document.body.appendChild(script);
-
-        // お掃除用関数
-        function cleanup() {
-            clearTimeout(fallbackTimeout);
-            const s = document.getElementById(callbackName);
-            if (s) s.remove();
-            delete window[callbackName];
         }
     }
 
