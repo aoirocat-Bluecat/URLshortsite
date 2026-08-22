@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -6,6 +7,7 @@
     <title>URL短縮ツール</title>
     <style>
         body {
+            /* 通知と相性の良いフォント指定に少し調整しました */
             font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
             background-color: #f4f7f6;
             display: flex;
@@ -13,7 +15,7 @@
             align-items: center;
             height: 100vh;
             margin: 0;
-            overflow: hidden; 
+            overflow-x: hidden; /* 通知が画面外にあるときの横スクロールを防ぐ */
         }
         .container {
             background-color: #ffffff;
@@ -40,10 +42,10 @@
             outline: none;
         }
         input[type="url"]:focus, input[type="text"]:focus {
-            border-color: #0078D4; 
+            border-color: #007BFF;
         }
         button {
-            background-color: #0078D4; 
+            background-color: #007BFF;
             color: white;
             border: none;
             padding: 12px 20px;
@@ -55,7 +57,7 @@
             margin-bottom: 10px;
         }
         button:hover {
-            background-color: #005A9E;
+            background-color: #0056b3;
         }
         button:disabled {
             background-color: #cccccc;
@@ -80,28 +82,28 @@
             background-color: #218838;
         }
 
-        /* --- Windows 11風 トースト通知 --- */
+        /* --- Windows 11風 トースト通知のスタイル --- */
         .toast {
             position: fixed;
             bottom: 24px;
             right: 24px;
-            background-color: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(10px); 
+            background-color: rgba(255, 255, 255, 0.9); /* 少し透明 */
+            backdrop-filter: blur(10px); /* すりガラス効果 */
             border-radius: 8px;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
             padding: 16px 20px;
             width: 280px;
-            border-left: 4px solid #0078D4; 
-            transform: translateX(120%); 
-            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            border-left: 4px solid #007BFF; /* アクセントカラー（青） */
+            transform: translateX(120%); /* 初期状態は画面外（右側） */
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* ちょっと弾むアニメーション */
             z-index: 1000;
             text-align: left;
         }
         .toast.show {
-            transform: translateX(0); 
+            transform: translateX(0); /* 画面内にスライドイン */
         }
         .toast.error-toast {
-            border-left-color: #d9534f; 
+            border-left-color: #d9534f; /* エラー時は赤色 */
         }
         .toast-title {
             font-weight: 600;
@@ -120,9 +122,9 @@
 
 <div class="container">
     <h1>URL短縮ツール</h1>
-    <input type="url" id="longUrl" placeholder="短くしたいURL (https://...)" required>
-    <button onclick="shortenUrl()" id="submitBtn">URLを短縮する</button>
-    <div id="errorMessage" class="error">有効なURL（http〜）を入力してください。</div>
+    <input type="url" id="longUrl" placeholder="短くしたいURLを入力 (https://...)" required>
+    <button id="submitBtn" onclick="shortenUrl()">URLを短縮する</button>
+    <div id="errorMessage" class="error">有効なURLを入力してください。</div>
 
     <div class="result-box" id="resultBox">
         <p>短縮されたURL:</p>
@@ -138,6 +140,7 @@
 </div>
 
 <script>
+    // 通知を表示する関数
     let toastTimeout;
     function showNotification(title, message, isError = false) {
         const toast = document.getElementById('toast');
@@ -159,20 +162,23 @@
         }, 3500);
     }
 
-    // JSONP用のコールバック関数
+    // 1. APIからデータを受け取るための専用の関数（JSONP用）
     function handleIsGdResponse(data) {
         const resultBox = document.getElementById('resultBox');
         const shortUrlInput = document.getElementById('shortUrl');
         const submitBtn = document.getElementById('submitBtn');
 
+        // URLが正しく返ってきた場合
         if (data.shorturl) {
             shortUrlInput.value = data.shorturl;
             resultBox.style.display = 'block';
-            showNotification("短縮完了", "URLの短縮に成功しました。");
+            showNotification("短縮完了", "URLの短縮に成功しました！");
         } else {
+            // エラーが返ってきた場合
             showNotification("エラー", "短縮に失敗しました。別のURLをお試しください。", true);
         }
-
+        
+        // ボタンを元の状態に戻す
         submitBtn.innerText = "URLを短縮する";
         submitBtn.disabled = false;
     }
@@ -183,6 +189,7 @@
         const errorMessage = document.getElementById('errorMessage');
         const submitBtn = document.getElementById('submitBtn');
 
+        // 入力チェック
         if (!longUrl || !longUrl.startsWith('http')) {
             errorMessage.style.display = 'block';
             resultBox.style.display = 'none';
@@ -190,32 +197,38 @@
         }
         errorMessage.style.display = 'none';
 
+        // 処理中はボタンを押せなくして「短縮中...」にする
         submitBtn.innerText = "短縮中...";
         submitBtn.disabled = true;
 
-        // CORSエラーを回避するためのJSONP方式（直接is.gdと通信）
+        // 2. fetchの代わりに、scriptタグを作って通信する（CORSエラー回避のため）
         const script = document.createElement('script');
+        // URLの最後に &callback=handleIsGdResponse を付けるのがポイントです
         script.src = `https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}&callback=handleIsGdResponse`;
         
+        // もしネットワーク自体が切れていた場合のエラー処理
         script.onerror = function() {
             showNotification("通信エラー", "インターネット接続を確認してください。", true);
             submitBtn.innerText = "URLを短縮する";
             submitBtn.disabled = false;
         };
 
+        // HTMLにscriptタグを追加して通信を実行
         document.body.appendChild(script);
         
+        // 通信が終わったら不要になったscriptタグを削除
         script.onload = function() {
             document.body.removeChild(script);
         };
     }
 
+    // コピー機能
     function copyUrl() {
         const shortUrl = document.getElementById('shortUrl').value;
         navigator.clipboard.writeText(shortUrl).then(() => {
             showNotification("コピー完了", "クリップボードにコピーしました！");
         }).catch(err => {
-            showNotification("エラー", "コピーに失敗しました。", true);
+            showNotification("エラー", "コピーに失敗しました。手動でコピーしてください。", true);
         });
     }
 </script>
